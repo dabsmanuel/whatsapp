@@ -521,9 +521,10 @@ const WhatsAppLinkGenerator = () => {
         )}
 
         {/* Footer */}
+        {/* Footer */}
         <footer className="text-center py-6 sm:py-8 text-gray-500">
           <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm">
-            <p className="font-medium text-sm sm:text-base">© 2025 WhatsApp Link Generator</p>
+            <p className="font-medium text-sm sm:text-base">© {new Date().getFullYear()} WhatsApp Link Generator</p>
             <p className="text-xs sm:text-sm mt-1">Streamline your business communication with professional WhatsApp links</p>
           </div>
         </footer>
