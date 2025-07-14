@@ -351,7 +351,7 @@ const WhatsAppLinkGenerator = () => {
                     required
                   />
                   <p className="text-xs sm:text-sm text-gray-500 mt-2 bg-blue-50 p-2 rounded-lg">
-                    💬 This message will appear in the customer's WhatsApp chat
+                    💬 This message will appear in the customer&apos;s WhatsApp chat
                   </p>
                 </div>
 
@@ -474,7 +474,7 @@ const WhatsAppLinkGenerator = () => {
 
                     <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 border-l-4 border-green-400">
                       <p className="text-gray-700 italic text-sm sm:text-base line-clamp-3">
-                        "{template.message}"
+                        `&quot;{template.message}`&quot;
                       </p>
                     </div>
 
