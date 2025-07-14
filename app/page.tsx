@@ -314,7 +314,7 @@ const WhatsAppLinkGenerator = () => {
                     type="text"
                     value={currentTemplate.businessName}
                     onChange={(e) => setCurrentTemplate({...currentTemplate, businessName: e.target.value})}
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white text-sm sm:text-base"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white text-sm sm:text-base text-gray-700"
                     placeholder="e.g., Sarah's Boutique"
                     required
                   />
@@ -329,7 +329,7 @@ const WhatsAppLinkGenerator = () => {
                     type="tel"
                     value={currentTemplate.phoneNumber}
                     onChange={(e) => setCurrentTemplate({...currentTemplate, phoneNumber: e.target.value})}
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white text-sm sm:text-base"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white text-sm sm:text-base text-gray-700"
                     placeholder="e.g., +1234567890"
                     required
                   />
@@ -346,7 +346,7 @@ const WhatsAppLinkGenerator = () => {
                   <textarea
                     value={currentTemplate.message}
                     onChange={(e) => setCurrentTemplate({...currentTemplate, message: e.target.value})}
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 sm:h-32 resize-none transition-all bg-gray-50 focus:bg-white text-sm sm:text-base"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 sm:h-32 resize-none transition-all bg-gray-50 focus:bg-white text-sm sm:text-base text-gray-700"
                     placeholder="Hi! I'm interested in your products. Can you please send me your catalog?"
                     required
                   />
