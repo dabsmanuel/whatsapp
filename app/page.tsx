@@ -28,21 +28,22 @@ const WhatsAppLinkGenerator = () => {
     message: '',
     shortUrl: '',
     clicks: 0,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   });
   const [isEditing, setIsEditing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState('');
   const [activeTab, setActiveTab] = useState('create');
-  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isGeneratingUrl, setIsGeneratingUrl] = useState(false);
 
-  // Load templates from memory on component mount
+  // Load templates from localStorage on component mount
   useEffect(() => {
     const savedTemplates = JSON.parse(localStorage.getItem('whatsappTemplates') || '[]') as Template[];
     setTemplates(savedTemplates);
   }, []);
 
-  // Save templates to memory whenever templates change
+  // Save templates to localStorage whenever templates change
   useEffect(() => {
     localStorage.setItem('whatsappTemplates', JSON.stringify(templates));
   }, [templates]);
@@ -52,23 +53,54 @@ const WhatsAppLinkGenerator = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const generateShortUrl = (): string => {
-    const randomId = Math.random().toString(36).substr(2, 8);
-    return `${window.location.origin}/s/${randomId}`;
-  };
-
   const generateWhatsAppUrl = (phoneNumber: string, message: string): string => {
     const cleanPhone = phoneNumber.replace(/\D/g, '');
     const encodedMessage = encodeURIComponent(message);
     return `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
   };
 
-  // URL shortener handler
-  const handleShortUrlClick = (template: Template) => {
-    // Simulate click tracking
-    simulateClick(template.id);
-    
-    // Create a data URL that redirects to WhatsApp
+  // Generate a short URL using TinyURL API
+  const generateShortUrl = async (longUrl: string): Promise<string> => {
+    try {
+      setIsGeneratingUrl(true);
+      const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
+      const shortUrl = await response.text();
+      if (shortUrl.startsWith('https://tinyurl.com/')) {
+        return shortUrl;
+      } else {
+        throw new Error('Failed to generate short URL');
+      }
+    } catch (error) {
+      console.error('Error generating short URL:', error);
+      // Fallback to is.gd if TinyURL fails
+      return generateShortUrlIsGd(longUrl);
+    } finally {
+      setIsGeneratingUrl(false);
+    }
+  };
+
+  // Alternative: Generate short URL using is.gd API
+  const generateShortUrlIsGd = async (longUrl: string): Promise<string> => {
+    try {
+      setIsGeneratingUrl(true);
+      const response = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`);
+      const shortUrl = await response.text();
+      if (shortUrl.startsWith('https://is.gd/')) {
+        return shortUrl;
+      } else {
+        throw new Error('Failed to generate short URL');
+      }
+    } catch (error) {
+      console.error('Error generating short URL with is.gd:', error);
+      // Fallback to original WhatsApp URL if both services fail
+      return longUrl;
+    } finally {
+      setIsGeneratingUrl(false);
+    }
+  };
+
+  // Generate a data URL for instant redirect
+  const generateDataUrl = (whatsappUrl: string): string => {
     const redirectHtml = `
       <!DOCTYPE html>
       <html>
@@ -84,10 +116,6 @@ const WhatsAppLinkGenerator = () => {
           @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
           .manual-link { margin-top: 20px; }
           .manual-link a { color: #25D366; text-decoration: none; font-weight: bold; }
-          @media (max-width: 480px) {
-            .container { padding: 20px; }
-            body { padding: 10px; }
-          }
         </style>
       </head>
       <body>
@@ -101,45 +129,40 @@ const WhatsAppLinkGenerator = () => {
           <p>You will be redirected to WhatsApp in a moment.</p>
           <div class="loading"></div>
           <div class="manual-link">
-            <p>If you're not redirected automatically, <a href="${template.whatsappUrl}" target="_blank">click here</a></p>
+            <p>If you're not redirected automatically, <a href="${whatsappUrl}" target="_blank">click here</a></p>
           </div>
         </div>
         <script>
           setTimeout(function() {
-            window.location.href = "${template.whatsappUrl}";
-          }, 2000);
+            window.location.href = "${whatsappUrl}";
+          }, 1500);
         </script>
       </body>
       </html>
     `;
-    
-    // Create a blob URL and open it
     const blob = new Blob([redirectHtml], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const newWindow = window.open(url, '_blank');
-    
-    // Clean up the blob URL after a short delay
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 5000);
+    return URL.createObjectURL(blob);
   };
 
-  const handleSubmit = (): void => {
+  const handleSubmit = async (): Promise<void> => {
     if (!currentTemplate.businessName || !currentTemplate.phoneNumber || !currentTemplate.message) {
       showNotification('error', 'Please fill in all required fields');
       return;
     }
 
+    const whatsappUrl = generateWhatsAppUrl(currentTemplate.phoneNumber, currentTemplate.message);
+    const shortUrl = await generateShortUrl(whatsappUrl);
+
     const newTemplate: Template = {
       ...currentTemplate,
       id: currentTemplate.id || Date.now(),
-      shortUrl: currentTemplate.shortUrl || generateShortUrl(),
-      whatsappUrl: generateWhatsAppUrl(currentTemplate.phoneNumber, currentTemplate.message),
-      createdAt: currentTemplate.createdAt || new Date().toISOString()
+      shortUrl,
+      whatsappUrl,
+      createdAt: currentTemplate.createdAt || new Date().toISOString(),
     };
 
     if (isEditing) {
-      setTemplates(templates.map(t => t.id === newTemplate.id ? newTemplate : t));
+      setTemplates(templates.map((t) => (t.id === newTemplate.id ? newTemplate : t)));
       showNotification('success', 'Template updated successfully!');
     } else {
       setTemplates([...templates, newTemplate]);
@@ -158,7 +181,7 @@ const WhatsAppLinkGenerator = () => {
       message: '',
       shortUrl: '',
       clicks: 0,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     });
     setIsEditing(false);
     setShowPreview(false);
@@ -173,7 +196,7 @@ const WhatsAppLinkGenerator = () => {
   const deleteTemplate = (id: number | null): void => {
     if (id === null) return;
     if (confirm('Are you sure you want to delete this template?')) {
-      setTemplates(templates.filter(t => t.id !== id));
+      setTemplates(templates.filter((t) => t.id !== id));
       showNotification('success', 'Template deleted successfully!');
     }
   };
@@ -181,15 +204,25 @@ const WhatsAppLinkGenerator = () => {
   const copyToClipboard = (text: string, type: string = 'url'): void => {
     navigator.clipboard.writeText(text);
     setCopiedUrl(text);
-    showNotification('success', `${type === 'url' ? 'URL' : 'Content'} copied to clipboard!`);
+    showNotification('success', `${type === 'url' ? 'Short URL' : 'Content'} copied to clipboard!`);
     setTimeout(() => setCopiedUrl(''), 2000);
+  };
+
+  const handleShortUrlClick = (template: Template): void => {
+    simulateClick(template.id);
+    // Open the short URL directly, which should redirect to WhatsApp
+    window.open(template.shortUrl, '_blank');
+  };
+
+  const handleDirectWhatsAppClick = (template: Template): void => {
+    simulateClick(template.id);
+    // Open WhatsApp directly
+    window.open(template.whatsappUrl, '_blank');
   };
 
   const simulateClick = (templateId: number | null): void => {
     if (templateId === null) return;
-    setTemplates(templates.map(t => 
-      t.id === templateId ? { ...t, clicks: t.clicks + 1 } : t
-    ));
+    setTemplates(templates.map((t) => (t.id === templateId ? { ...t, clicks: t.clicks + 1 } : t)));
   };
 
   const MessagePreview: React.FC<MessagePreviewProps> = ({ message, businessName }) => (
@@ -219,11 +252,12 @@ const WhatsAppLinkGenerator = () => {
 
   const Notification = () => {
     if (!notification) return null;
-    
     return (
-      <div className={`fixed top-4 right-4 left-4 sm:left-auto z-50 flex items-center p-4 rounded-lg shadow-lg max-w-sm sm:max-w-none mx-auto sm:mx-0 ${
-        notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-      }`}>
+      <div
+        className={`fixed top-4 right-4 left-4 sm:left-auto z-50 flex items-center p-4 rounded-lg shadow-lg max-w-sm sm:max-w-none mx-auto sm:mx-0 ${
+          notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+        }`}
+      >
         {notification.type === 'success' ? (
           <CheckCircle className="w-5 h-5 mr-2 flex-shrink-0" />
         ) : (
@@ -237,7 +271,7 @@ const WhatsAppLinkGenerator = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-green-50">
       <Notification />
-      
+
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white py-8 sm:py-12 lg:py-16 px-4">
         <div className="max-w-4xl mx-auto text-center">
@@ -250,8 +284,8 @@ const WhatsAppLinkGenerator = () => {
             </h1>
           </div>
           <p className="text-base sm:text-lg lg:text-xl text-green-100 max-w-2xl mx-auto px-4 sm:px-0">
-            Create professional shortened URLs that open WhatsApp with pre-filled messages. 
-            Perfect for businesses to streamline customer communication.
+            Create professional shortened URLs that open WhatsApp with pre-filled messages. Perfect for businesses to
+            streamline customer communication.
           </p>
         </div>
       </div>
@@ -302,7 +336,7 @@ const WhatsAppLinkGenerator = () => {
                 </p>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
               <div className="space-y-4 sm:space-y-6">
                 <div>
@@ -313,7 +347,7 @@ const WhatsAppLinkGenerator = () => {
                   <input
                     type="text"
                     value={currentTemplate.businessName}
-                    onChange={(e) => setCurrentTemplate({...currentTemplate, businessName: e.target.value})}
+                    onChange={(e) => setCurrentTemplate({ ...currentTemplate, businessName: e.target.value })}
                     className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white text-sm sm:text-base text-gray-700"
                     placeholder="e.g., Sarah's Boutique"
                     required
@@ -328,7 +362,7 @@ const WhatsAppLinkGenerator = () => {
                   <input
                     type="tel"
                     value={currentTemplate.phoneNumber}
-                    onChange={(e) => setCurrentTemplate({...currentTemplate, phoneNumber: e.target.value})}
+                    onChange={(e) => setCurrentTemplate({ ...currentTemplate, phoneNumber: e.target.value })}
                     className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white text-sm sm:text-base text-gray-700"
                     placeholder="e.g., +1234567890"
                     required
@@ -345,13 +379,13 @@ const WhatsAppLinkGenerator = () => {
                   </label>
                   <textarea
                     value={currentTemplate.message}
-                    onChange={(e) => setCurrentTemplate({...currentTemplate, message: e.target.value})}
+                    onChange={(e) => setCurrentTemplate({ ...currentTemplate, message: e.target.value })}
                     className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 sm:h-32 resize-none transition-all bg-gray-50 focus:bg-white text-sm sm:text-base text-gray-700"
                     placeholder="Hi! I'm interested in your products. Can you please send me your catalog?"
                     required
                   />
                   <p className="text-xs sm:text-sm text-gray-500 mt-2 bg-blue-50 p-2 rounded-lg">
-                    💬 This message will appear in the customer&apos;s WhatsApp chat
+                    💬 This message will appear in the customer's WhatsApp chat
                   </p>
                 </div>
 
@@ -368,10 +402,20 @@ const WhatsAppLinkGenerator = () => {
                   <button
                     type="button"
                     onClick={handleSubmit}
-                    className="px-6 sm:px-8 py-2 sm:py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all duration-200 flex items-center justify-center shadow-md hover:shadow-lg font-semibold text-sm sm:text-base"
+                    disabled={isGeneratingUrl}
+                    className="px-6 sm:px-8 py-2 sm:py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all duration-200 flex items-center justify-center shadow-md hover:shadow-lg font-semibold text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Link2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                    {isEditing ? 'Update Template' : 'Generate Link'}
+                    {isGeneratingUrl ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Link2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                        {isEditing ? 'Update Template' : 'Generate Link'}
+                      </>
+                    )}
                   </button>
 
                   {isEditing && (
@@ -388,10 +432,7 @@ const WhatsAppLinkGenerator = () => {
 
               <div className="lg:pl-8">
                 {showPreview && currentTemplate.message && (
-                  <MessagePreview 
-                    message={currentTemplate.message} 
-                    businessName={currentTemplate.businessName || 'Your Business Name'}
-                  />
+                  <MessagePreview message={currentTemplate.message} businessName={currentTemplate.businessName || 'Your Business Name'} />
                 )}
               </div>
             </div>
@@ -407,12 +448,8 @@ const WhatsAppLinkGenerator = () => {
                   <Eye className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-600" />
                 </div>
                 <div>
-                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">
-                    Your Templates
-                  </h2>
-                  <p className="text-gray-600 mt-1 text-sm sm:text-base">
-                    Manage and track your WhatsApp link templates
-                  </p>
+                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">Your Templates</h2>
+                  <p className="text-gray-600 mt-1 text-sm sm:text-base">Manage and track your WhatsApp link templates</p>
                 </div>
               </div>
               {templates.length > 0 && (
@@ -443,12 +480,13 @@ const WhatsAppLinkGenerator = () => {
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
                 {templates.map((template) => (
-                  <div key={template.id} className="border border-gray-200 rounded-xl p-4 sm:p-6 hover:border-green-300 transition-all duration-200 hover:shadow-md bg-gradient-to-br from-white to-gray-50">
+                  <div
+                    key={template.id}
+                    className="border border-gray-200 rounded-xl p-4 sm:p-6 hover:border-green-300 transition-all duration-200 hover:shadow-md bg-gradient-to-br from-white to-gray-50"
+                  >
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-lg sm:text-xl text-gray-800 mb-1 truncate">
-                          {template.businessName}
-                        </h3>
+                        <h3 className="font-bold text-lg sm:text-xl text-gray-800 mb-1 truncate">{template.businessName}</h3>
                         <p className="text-gray-600 flex items-center text-sm sm:text-base">
                           <Phone className="w-4 h-4 mr-1 flex-shrink-0" />
                           <span className="truncate">{template.phoneNumber}</span>
@@ -473,9 +511,7 @@ const WhatsAppLinkGenerator = () => {
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 border-l-4 border-green-400">
-                      <p className="text-gray-700 italic text-sm sm:text-base line-clamp-3">
-                        `&quot;{template.message}`&quot;
-                      </p>
+                      <p className="text-gray-700 italic text-sm sm:text-base line-clamp-3">{`"${template.message}"`}</p>
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs sm:text-sm text-gray-600 mb-4 space-y-2 sm:space-y-0">
@@ -483,30 +519,30 @@ const WhatsAppLinkGenerator = () => {
                         <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs truncate max-w-32 sm:max-w-none">
                           {template.shortUrl}
                         </span>
-                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
-                          {template.clicks} clicks
-                        </span>
+                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">{template.clicks} clicks</span>
                       </div>
-                      <span className="text-gray-500 text-xs">
-                        {new Date(template.createdAt).toLocaleDateString()}
-                      </span>
+                      <span className="text-gray-500 text-xs">{new Date(template.createdAt).toLocaleDateString()}</span>
                     </div>
-                    
+
                     <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                       <button
                         onClick={() => handleShortUrlClick(template)}
                         className="flex-1 px-3 sm:px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200 flex items-center justify-center font-medium text-sm sm:text-base"
                       >
                         <ExternalLink className="w-4 h-4 mr-2" />
-                        Open Link
+                        Open Short Link
                       </button>
-                      
+                      <button
+                        onClick={() => handleDirectWhatsAppClick(template)}
+                        className="flex-1 px-3 sm:px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 flex items-center justify-center font-medium text-sm sm:text-base"
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Open WhatsApp
+                      </button>
                       <button
                         onClick={() => copyToClipboard(template.shortUrl)}
                         className={`flex-1 px-3 sm:px-4 py-2 rounded-lg transition-all duration-200 flex items-center justify-center font-medium text-sm sm:text-base ${
-                          copiedUrl === template.shortUrl
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          copiedUrl === template.shortUrl ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                         }`}
                       >
                         <Copy className="w-4 h-4 mr-2" />
@@ -520,8 +556,6 @@ const WhatsAppLinkGenerator = () => {
           </div>
         )}
 
-        {/* Footer */}
-        {/* Footer */}
         {/* Footer */}
         <footer className="text-center py-6 sm:py-8 text-gray-500">
           <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm">
